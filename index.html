@@ -22,6 +22,10 @@
             border-radius: 12px;
             padding: 20px;
             box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            display: flex ;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
         
         #canvasWrapper {
@@ -95,32 +99,48 @@
         }
         
         #instructions {
+
             margin-top: 15px;
             color: #333;
             max-width: 500px;
             line-height: 1.6;
         }
+
+        #result {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 48px;
+            font-weight: bold;
+            text-align: center;
+            pointer-events: none;
+            z-index: 9999;
+        }
     </style>
 </head>
 <body>
     <div id="gameContainer">
-        <div id="score">Score: 0</div>
+        <div id="score">Timer: 0:10</div>
+
         <div id="canvasWrapper">
             <canvas id="gameCanvas" width="600" height="600"></canvas>
+            <div id="result" style="display: none;width: 300;height: 300;">You Lost !</div>
         </div>
+
         <div id="controls">
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Player Image:</label>
-                <input type="file" id="playerImage" accept="image/*" style="margin-bottom: 10px;">
-            </div>
+        
+
             <button id="startBtn">Start Game</button>
             <button id="pauseBtn">Pause</button>
+
             <div id="instructions">
                 <strong>How to Play:</strong><br>
-                Upload custom image for your player (optional).<br>
-                Use Arrow Keys or WASD to move the runner.<br>
-                Avoid the snake (green) and obstacles!<br>
-                Survive as long as possible to increase your score.
+                Upload custom image (optional).<br>
+                Use Arrow Keys or WASD to move.<br>
+                Avoid the snake and obstacles.<br>
+                Survive as long as possible!
             </div>
         </div>
     </div>
@@ -132,19 +152,21 @@
         const scoreEl = document.getElementById('score');
         const startBtn = document.getElementById('startBtn');
         const pauseBtn = document.getElementById('pauseBtn');
-        const playerImageInput = document.getElementById('playerImage');
+        resultEl = document.getElementById('result');
         
         const gridSize = 30;
         const tileCount = canvas.width / gridSize;
         
         let gameRunning = false;
         let gamePaused = false;
-        let score = 0;
+        let score = 10;
         let gameLoop;
-        
+        let scoreTimer = null;
+
         let playerImg = new Image();
         playerImg.src = 'obelixa1.png';
         
+        // Player object
         const player = {
             x: 5,
             y: 5,
@@ -162,23 +184,42 @@
         let obstacleElements = [];
         let obstacles = [];
         const keys = {};
-        
-        playerImageInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        playerImg = img;
-                        if (!gameRunning) draw();
-                    };
-                    img.src = event.target.result;
-                };
-                reader.readAsDataURL(file);
-            }
-        });
-        
+
+
+        // ──────────────────────────────────────────
+        // SCORE TIMER (REAL FIX)
+        // ──────────────────────────────────────────
+        function startScoreTimer() {
+    if (scoreTimer) clearInterval(scoreTimer);
+
+    scoreTimer = setInterval(() => {
+        if (!gameRunning || gamePaused) return;
+
+        score--; // drop every second
+        updateScoreDisplay();
+
+        // Time is up = WIN (if snake didn't kill you)
+        if (score <= 0) {
+            win = true;
+            endGame();
+        }
+
+    }, 1000);
+}
+
+        function updateScoreDisplay() {
+    const minutes = Math.floor(score / 60);
+    const seconds = score % 60;
+    console.log(seconds)
+    const display = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    scoreEl.textContent = `Timer: ${display}`;
+}
+
+
+
+        // ──────────────────────────────────────────
+        // CONTROLS
+        // ──────────────────────────────────────────
         document.addEventListener('keydown', (e) => {
             keys[e.key] = true;
             e.preventDefault();
@@ -187,12 +228,20 @@
         document.addEventListener('keyup', (e) => {
             keys[e.key] = false;
         });
-        
+
+
+        // ──────────────────────────────────────────
+        // CREATE SNAKE
+        // ──────────────────────────────────────────
         function createSnake() {
             snake.segments.forEach(seg => seg.element.remove());
             snake.segments = [];
             
-            const positions = [{x: 15, y: 15}, {x: 14, y: 15}, {x: 13, y: 15}];
+            const positions = [
+                {x: 15, y: 15}, 
+                {x: 14, y: 15}, 
+                {x: 13, y: 15}
+            ];
             
             positions.forEach((pos, i) => {
                 const div = document.createElement('div');
@@ -214,13 +263,17 @@
                 snake.segments.push({x: pos.x, y: pos.y, element: div});
             });
         }
-        
+
+
+        // ──────────────────────────────────────────
+        // OBSTACLES
+        // ──────────────────────────────────────────
         function createObstacles() {
             obstacleElements.forEach(el => el.remove());
             obstacleElements = [];
             obstacles = [];
             
-            const num = 5 + Math.floor(score / 500);
+            const num = 4 + Math.floor(score / 500);
             
             for (let i = 0; i < num; i++) {
                 let x, y, valid = false;
@@ -254,7 +307,11 @@
                 });
             }
         }
-        
+
+
+        // ──────────────────────────────────────────
+        // RENDER PLAYER
+        // ──────────────────────────────────────────
         function drawPlayer() {
             const x = player.x * gridSize;
             const y = player.y * gridSize;
@@ -262,7 +319,11 @@
                 ctx.drawImage(playerImg, x + 2, y + 2, player.width, player.height);
             }
         }
-        
+
+
+        // ──────────────────────────────────────────
+        // GRID
+        // ──────────────────────────────────────────
         function drawGrid() {
             ctx.strokeStyle = 'rgba(224, 224, 224, 0.2)';
             ctx.lineWidth = 0.5;
@@ -277,20 +338,30 @@
                 ctx.stroke();
             }
         }
-        
+
+
+        // ──────────────────────────────────────────
+        // COLLISION CHECK
+        // ──────────────────────────────────────────
         function checkCollision(r1, r2) {
             return r1.x < r2.x + r2.width &&
                    r1.x + r1.width > r2.x &&
                    r1.y < r2.y + r2.height &&
                    r1.y + r1.height > r2.y;
         }
-        
+
+
+
+        // ──────────────────────────────────────────
+        // MOVE PLAYER
+        // ──────────────────────────────────────────
         function movePlayer() {
             player.moveDelay++;
             if (player.moveDelay < player.moveSpeed) return;
             player.moveDelay = 0;
             
-            let newX = player.x, newY = player.y;
+            let newX = player.x;
+            let newY = player.y;
             
             if (keys['ArrowUp'] || keys['w'] || keys['W']) newY -= 1;
             if (keys['ArrowDown'] || keys['s'] || keys['S']) newY += 1;
@@ -305,7 +376,7 @@
             const playerRect = {
                 x: newX * gridSize + 2,
                 y: newY * gridSize + 2,
-                width: player.width - 60 ,
+                width: player.width - 60,
                 height: player.height - 70
             };
             
@@ -319,16 +390,22 @@
             player.x = newX;
             player.y = newY;
         }
-        
+
+
+
+        // ──────────────────────────────────────────
+        // MOVE SNAKE
+        // ──────────────────────────────────────────
         function moveSnake() {
             snake.speed++;
-            if (snake.speed < 15) return;
+            if (snake.speed < 20) return;
             snake.speed = 0;
             
             if (!snake.segments.length) return;
             
             const head = snake.segments[0];
-            let newX = head.x, newY = head.y;
+            let newX = head.x;
+            let newY = head.y;
             
             const dx = player.x - head.x;
             const dy = player.y - head.y;
@@ -367,7 +444,11 @@
             snake.segments[0].element.style.left = (newX * gridSize + 2) + 'px';
             snake.segments[0].element.style.top = (newY * gridSize + 2) + 'px';
         }
-        
+
+
+        // ──────────────────────────────────────────
+        // CHECK COLLISIONS
+        // ──────────────────────────────────────────
         function checkCollisions() {
             if (!snake.segments.length) return;
             
@@ -387,12 +468,18 @@
                 };
                 
                 if (checkCollision(pRect, sRect)) {
+                    win = false
                     endGame();
                     return;
                 }
             }
         }
-        
+
+
+
+        // ──────────────────────────────────────────
+        // GAME UPDATE LOOP
+        // ──────────────────────────────────────────
         function update() {
             if (!gameRunning || gamePaused) return;
             
@@ -400,57 +487,82 @@
             moveSnake();
             checkCollisions();
             
-            score++;
-            scoreEl.textContent = `Score: ${score}`;
-            
             if (score % 500 === 0 && score > 0) {
                 createObstacles();
             }
         }
-        
+
+
+        // ──────────────────────────────────────────
+        // RENDER LOOP
+        // ──────────────────────────────────────────
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             drawGrid();
             drawPlayer();
         }
-        
+
         function gameLoopFunc() {
             update();
             draw();
             gameLoop = requestAnimationFrame(gameLoopFunc);
         }
-        
+
+
+
+        // ──────────────────────────────────────────
+        // START GAME
+        // ──────────────────────────────────────────
         function startGame() {
-            if (gameRunning && !gamePaused) return;
-            
+            resultEl.style.display = 'none';
+            win = false;
             if (!gameRunning) {
                 player.x = 5;
                 player.y = 5;
                 player.moveDelay = 0;
-                score = 0;
-                scoreEl.textContent = 'Score: 0';
+
+                score = 10;
+                updateScoreDisplay();
+
                 createSnake();
                 createObstacles();
+                startScoreTimer();
             }
-            
+
             gameRunning = true;
             gamePaused = false;
             startBtn.textContent = 'Restart';
             pauseBtn.textContent = 'Pause';
-            
+
             if (!gameLoop) gameLoopFunc();
         }
-        
+
+
+
+        // ──────────────────────────────────────────
+        // PAUSE / RESUME
+        // ──────────────────────────────────────────
         function togglePause() {
             if (!gameRunning) return;
+
             gamePaused = !gamePaused;
             pauseBtn.textContent = gamePaused ? 'Resume' : 'Pause';
         }
-        
+
+
+
+        // ──────────────────────────────────────────
+        // END GAME
+        // ──────────────────────────────────────────
         function endGame() {
             gameRunning = false;
             cancelAnimationFrame(gameLoop);
             gameLoop = null;
+
+            if (scoreTimer) {
+                clearInterval(scoreTimer);
+                scoreTimer = null;
+            }
             
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -458,17 +570,31 @@
             ctx.fillStyle = 'white';
             ctx.font = 'bold 48px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText('GAME OVER!', canvas.width / 2, canvas.height / 2 - 30);
+            if(win){
+                resultEl.style.display = 'block';
+                resultEl.textContent = 'YOU WIN !';
+                ctx.fillText('YOU WIN!');
+
+            } else {
+                resultEl.style.display = 'block';
+                ctx.fillText('GAME OVER!');
+            }
+            
             
             ctx.font = '32px Arial';
             ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height / 2 + 30);
             
             startBtn.textContent = 'Play Again';
         }
-        
+
+
+
+        // ──────────────────────────────────────────
+        // EVENT LISTENERS
+        // ──────────────────────────────────────────
         startBtn.addEventListener('click', startGame);
         pauseBtn.addEventListener('click', togglePause);
-        
+
         playerImg.onload = () => draw();
     </script>
 </body>
